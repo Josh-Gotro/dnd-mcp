@@ -156,6 +156,53 @@ class APICache:
             except Exception as e:
                 logger.warning(f"Failed to clear persistent cache: {e}")
 
+    def clear_prefix(self, prefix: str) -> int:
+        """Clear all cache entries whose keys start with the given prefix.
+
+        Args:
+            prefix: The prefix to match against cache keys
+
+        Returns:
+            The number of items cleared from the cache
+        """
+        # Find all keys that match the prefix
+        keys_to_remove = [key for key in self.cache.keys() if key.startswith(prefix)]
+
+        if not keys_to_remove:
+            logger.debug(f"No cache entries found with prefix: {prefix}")
+            return 0
+
+        # Remove from in-memory cache
+        for key in keys_to_remove:
+            del self.cache[key]
+
+        # Remove from persistent storage
+        if self.persistent:
+            try:
+                # Delete the pickle files
+                for key in keys_to_remove:
+                    cache_path = self._get_cache_path(key)
+                    if os.path.exists(cache_path):
+                        os.unlink(cache_path)
+
+                # Update the index file
+                index_path = os.path.join(self.cache_dir, "index.json")
+                if os.path.exists(index_path):
+                    with open(index_path, "r") as f:
+                        index = json.load(f)
+
+                    # Remove cleared keys from index
+                    for key in keys_to_remove:
+                        index.pop(key, None)
+
+                    with open(index_path, "w") as f:
+                        json.dump(index, f)
+            except Exception as e:
+                logger.warning(f"Failed to clear persistent cache for prefix {prefix}: {e}")
+
+        logger.debug(f"Cleared {len(keys_to_remove)} cache entries with prefix: {prefix}")
+        return len(keys_to_remove)
+
     def __len__(self) -> int:
         """Return the number of items in the cache."""
         return len(self.cache)
