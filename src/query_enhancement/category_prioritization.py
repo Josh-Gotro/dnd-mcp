@@ -97,6 +97,36 @@ CATEGORY_KEYWORDS = {
         "grappled", "incapacitated", "invisible", "paralyzed", "petrified",
         "poisoned", "prone", "restrained", "stunned", "unconscious", "level",
         "effect", "remove", "cure", "immune", "resistant", "vulnerable"
+    ],
+
+    # Campaign-specific categories (for Supabase integration)
+    "campaign_characters": [
+        "character", "party", "party member", "character sheet", "level up",
+        "hit points", "hp", "armor class", "ac", "ability scores", "stats",
+        "nico", "brutte", "squadde", "companion", "familiar", "animal companion"
+    ],
+
+    "campaign_inventory": [
+        "inventory", "items", "loot", "treasure", "bag of holding", "storage",
+        "equipment", "gear", "what do we have", "where is", "find item",
+        "magic items", "potions", "scrolls", "weapons", "armor"
+    ],
+
+    "campaign_currency": [
+        "gold", "silver", "copper", "platinum", "electrum", "money", "coins",
+        "wealth", "currency", "gp", "sp", "cp", "pp", "ep", "how much",
+        "treasure", "pay", "buy", "sell", "spend"
+    ],
+
+    "campaign_spells": [
+        "my spells", "known spells", "spell list", "can i cast", "do i have",
+        "staff of power", "cli lyre", "spell access", "item spells"
+    ],
+
+    "campaign_diary": [
+        "diary", "journal", "session", "session notes", "what happened",
+        "last session", "campaign log", "adventure", "quest", "npcs",
+        "locations visited", "recap"
     ]
 }
 
@@ -130,7 +160,13 @@ def prioritize_categories(query: str) -> Dict[str, float]:
         "rules": 0.0,
         "backgrounds": 0.0,
         "feats": 0.0,
-        "conditions": 0.0
+        "conditions": 0.0,
+        # Campaign categories
+        "campaign_characters": 0.0,
+        "campaign_inventory": 0.0,
+        "campaign_currency": 0.0,
+        "campaign_spells": 0.0,
+        "campaign_diary": 0.0
     }
 
     # Split the query into words

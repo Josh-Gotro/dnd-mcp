@@ -11,6 +11,7 @@ from src.core.formatters import format_monster_data, format_spell_data, format_c
 import requests
 import logging
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 from src.core.cache import APICache
 import src.core.formatters as formatters
 import src.core.resources as resources
@@ -31,6 +32,24 @@ from src.templates import (
     format_dnd_data,
     format_search_results,
     TEMPLATES_ENABLED
+)
+# Import campaign templates
+from src.templates.campaign import (
+    format_character_card,
+    format_character_list,
+    format_character_spells,
+    format_character_feats,
+    format_character_forms,
+    format_character_companions,
+    format_inventory_list,
+    format_inventory_search_results,
+    format_currency_by_location,
+    format_wealth_summary,
+    format_storage_locations,
+    format_diary_entry,
+    format_diary_list,
+    format_currency_transaction,
+    format_inventory_transaction
 )
 # Import our query enhancement module
 from src.query_enhancement import (
@@ -1662,3 +1681,1303 @@ def register_tools(app, cache: APICache):
         return round(total_value, 2)
 
     print("D&D API tools registered successfully", file=sys.stderr)
+
+
+def register_campaign_tools(app, supabase_client):
+    """Register campaign database tools with the FastMCP app.
+
+    Args:
+        app: The FastMCP app instance
+        supabase_client: The SupabaseClient instance for database access
+    """
+    print("Registering Campaign tools...", file=sys.stderr)
+
+    # =========================================================================
+    # CHARACTER TOOLS
+    # =========================================================================
+
+    @app.tool()
+    def get_party_characters(party_name: str = None) -> Dict[str, Any]:
+        """Get all characters in the campaign, optionally filtered by party.
+
+        Returns character names, classes, races, and levels for quick reference.
+        Use get_character_details for full character information.
+
+        Args:
+            party_name: Optional party name to filter characters
+
+        Returns:
+            Formatted list of party characters with basic stats.
+        """
+        logger.debug(f"Getting party characters: {party_name}")
+
+        try:
+            # Get party ID if name provided
+            party_id = None
+            if party_name:
+                parties = supabase_client.get("parties",
+                                              filters={"name": f"ilike.{party_name}"})
+                if parties:
+                    party_id = parties[0]["id"]
+
+            characters = supabase_client.get_characters(party_id)
+
+            return {
+                "characters": characters,
+                "count": len(characters),
+                "content": format_character_list(characters),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting characters: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_character_details(character_name: str) -> Dict[str, Any]:
+        """Get full details for a specific character.
+
+        Includes ability scores, combat stats, spellcasting info, and class features.
+
+        Args:
+            character_name: Name of the character to look up
+
+        Returns:
+            Detailed character sheet with all available information.
+        """
+        logger.debug(f"Getting character details: {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            return {
+                "character": char,
+                "content": format_character_card(char),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting character details: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_character_spells(character_name: str, source_type: str = None) -> Dict[str, Any]:
+        """Get all spells available to a character.
+
+        Shows spells organized by source (class, item, feat) and level.
+
+        Args:
+            character_name: Name of the character
+            source_type: Optional filter for spell source (class, item, feat)
+
+        Returns:
+            Formatted spell list organized by source and level.
+        """
+        logger.debug(f"Getting spells for {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            spells = supabase_client.get_character_spells(char["id"], source_type)
+
+            return {
+                "spells": spells,
+                "count": len(spells),
+                "content": format_character_spells(character_name, spells),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting character spells: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_character_feats(character_name: str) -> Dict[str, Any]:
+        """Get all feats a character has.
+
+        Args:
+            character_name: Name of the character
+
+        Returns:
+            List of feats with descriptions and benefits.
+        """
+        logger.debug(f"Getting feats for {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            feats = supabase_client.get_character_feats(char["id"])
+
+            return {
+                "feats": feats,
+                "count": len(feats),
+                "content": format_character_feats(character_name, feats),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting character feats: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_character_forms(character_name: str) -> Dict[str, Any]:
+        """Get transformation forms available to a character.
+
+        Useful for druids, shapechangers, or characters with polymorph abilities.
+
+        Args:
+            character_name: Name of the character
+
+        Returns:
+            List of available forms with stats and notes.
+        """
+        logger.debug(f"Getting forms for {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            forms = supabase_client.get_character_forms(char["id"])
+
+            return {
+                "forms": forms,
+                "count": len(forms),
+                "content": format_character_forms(character_name, forms),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting character forms: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_character_companions(character_name: str) -> Dict[str, Any]:
+        """Get companions (familiars, animal companions, etc.) for a character.
+
+        Args:
+            character_name: Name of the character
+
+        Returns:
+            List of companions with stats and current HP.
+        """
+        logger.debug(f"Getting companions for {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            companions = supabase_client.get_character_companions(char["id"])
+
+            return {
+                "companions": companions,
+                "count": len(companions),
+                "content": format_character_companions(character_name, companions),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting character companions: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def update_character(character_name: str,
+                        level: int = None,
+                        class_summary: str = None,
+                        hp_current: int = None,
+                        hp_max: int = None,
+                        notes: str = None) -> Dict[str, Any]:
+        """Update character information.
+
+        Use for leveling up, changing HP, or updating notes.
+
+        Args:
+            character_name: Name of the character to update
+            level: New character level
+            class_summary: Updated class summary (e.g., "Bard 10 / Sorcerer 3")
+            hp_current: Current hit points
+            hp_max: Maximum hit points
+            notes: Additional notes
+
+        Returns:
+            Updated character information.
+        """
+        logger.debug(f"Updating character: {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            # Build update data
+            updates = {}
+            if level is not None:
+                updates["level"] = level
+            if class_summary is not None:
+                updates["class_summary"] = class_summary
+
+            # HP updates go into dndbeyond_json
+            json_updates = {}
+            if hp_current is not None or hp_max is not None:
+                current_hp = char.get("dndbeyond_json", {}).get("hit_points", {})
+                json_updates["hit_points"] = {
+                    "current": hp_current if hp_current is not None else current_hp.get("current"),
+                    "max": hp_max if hp_max is not None else current_hp.get("max")
+                }
+
+            if updates:
+                supabase_client.update_character(char["id"], updates)
+            if json_updates:
+                supabase_client.update_character_json(char["id"], json_updates)
+
+            # Get updated character
+            updated = supabase_client.get_character(char["id"])
+
+            return {
+                "character": updated,
+                "content": format_character_card(updated),
+                "message": f"Updated {character_name}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error updating character: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    # =========================================================================
+    # INVENTORY TOOLS
+    # =========================================================================
+
+    @app.tool()
+    def get_inventory(location_name: str = None) -> Dict[str, Any]:
+        """Get inventory items, optionally filtered by storage location.
+
+        Shows items organized by type with quantity, rarity, and magic status.
+
+        Args:
+            location_name: Optional location to filter (e.g., "Bag of Holding", "Vraath Keep")
+
+        Returns:
+            Formatted inventory list grouped by item type.
+        """
+        logger.debug(f"Getting inventory: {location_name}")
+
+        try:
+            items = supabase_client.get_inventory(location_name=location_name)
+
+            return {
+                "items": items,
+                "count": len(items),
+                "content": format_inventory_list(items, location_name),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting inventory: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def search_inventory(query: str) -> Dict[str, Any]:
+        """Search for items across all storage locations.
+
+        Args:
+            query: Search term to match against item names
+
+        Returns:
+            Matching items with their locations.
+        """
+        logger.debug(f"Searching inventory: {query}")
+
+        try:
+            items = supabase_client.search_inventory(query)
+
+            return {
+                "items": items,
+                "count": len(items),
+                "content": format_inventory_search_results(items, query),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error searching inventory: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_magic_items(location_name: str = None) -> Dict[str, Any]:
+        """Get all magic items, optionally filtered by location.
+
+        Args:
+            location_name: Optional location to filter
+
+        Returns:
+            List of magic items with rarity.
+        """
+        logger.debug(f"Getting magic items: {location_name}")
+
+        try:
+            # Get location ID if name provided
+            location_id = None
+            if location_name:
+                loc = supabase_client.get_storage_location_by_name(location_name)
+                if loc:
+                    location_id = loc["id"]
+
+            items = supabase_client.get_magic_items(location_id)
+
+            return {
+                "items": items,
+                "count": len(items),
+                "content": format_inventory_list(items, location_name or "All Locations"),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting magic items: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def add_item(location_name: str,
+                item_name: str,
+                quantity: int = 1,
+                is_magic: bool = False,
+                rarity: str = None,
+                item_type: str = None,
+                description: str = None,
+                notes: str = None,
+                reason: str = None) -> Dict[str, Any]:
+        """Add an item to inventory.
+
+        Creates a ledger entry for transaction history.
+
+        Args:
+            location_name: Storage location name (e.g., "Bag of Holding")
+            item_name: Name of the item
+            quantity: Number of items (default 1)
+            is_magic: Whether the item is magical
+            rarity: Item rarity (common, uncommon, rare, very_rare, legendary)
+            item_type: Item category (weapon, armor, potion, scroll, etc.)
+            description: Item description
+            notes: Additional notes
+            reason: Reason for adding (e.g., "Looted from dragon hoard")
+
+        Returns:
+            Added item details.
+        """
+        logger.debug(f"Adding item: {item_name} to {location_name}")
+
+        try:
+            loc = supabase_client.get_storage_location_by_name(location_name)
+            if not loc:
+                return {"error": f"Location '{location_name}' not found",
+                        "source": "Campaign Database"}
+
+            result = supabase_client.add_item(
+                storage_location_id=loc["id"],
+                item_name=item_name,
+                quantity=quantity,
+                is_magic=is_magic,
+                rarity=rarity,
+                item_type=item_type,
+                item_description=description,
+                notes=notes,
+                reason=reason
+            )
+
+            return {
+                "item": result,
+                "content": format_inventory_transaction(result, "added"),
+                "message": f"Added {quantity}x {item_name} to {location_name}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error adding item: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def remove_item(location_name: str,
+                   item_name: str,
+                   quantity: int = None,
+                   reason: str = None) -> Dict[str, Any]:
+        """Remove an item from inventory.
+
+        If quantity not specified, removes all of that item.
+        Creates a ledger entry for transaction history.
+
+        Args:
+            location_name: Storage location name
+            item_name: Name of the item to remove
+            quantity: Number to remove (default: all)
+            reason: Reason for removal (e.g., "Used in combat", "Sold to merchant")
+
+        Returns:
+            Result of the removal operation.
+        """
+        logger.debug(f"Removing item: {item_name} from {location_name}")
+
+        try:
+            loc = supabase_client.get_storage_location_by_name(location_name)
+            if not loc:
+                return {"error": f"Location '{location_name}' not found",
+                        "source": "Campaign Database"}
+
+            result = supabase_client.remove_item(
+                storage_location_id=loc["id"],
+                item_name=item_name,
+                quantity=quantity,
+                reason=reason
+            )
+
+            if result is None:
+                return {"error": f"Item '{item_name}' not found in {location_name}",
+                        "source": "Campaign Database"}
+
+            return {
+                "result": result,
+                "content": format_inventory_transaction(result, "removed"),
+                "message": f"Removed {item_name} from {location_name}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error removing item: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def transfer_item(from_location: str,
+                     to_location: str,
+                     item_name: str,
+                     quantity: int = None,
+                     reason: str = None) -> Dict[str, Any]:
+        """Transfer an item between storage locations.
+
+        Args:
+            from_location: Source location name
+            to_location: Destination location name
+            item_name: Name of the item to transfer
+            quantity: Number to transfer (default: all)
+            reason: Reason for transfer
+
+        Returns:
+            Transfer result.
+        """
+        logger.debug(f"Transferring {item_name} from {from_location} to {to_location}")
+
+        try:
+            from_loc = supabase_client.get_storage_location_by_name(from_location)
+            to_loc = supabase_client.get_storage_location_by_name(to_location)
+
+            if not from_loc:
+                return {"error": f"Location '{from_location}' not found",
+                        "source": "Campaign Database"}
+            if not to_loc:
+                return {"error": f"Location '{to_location}' not found",
+                        "source": "Campaign Database"}
+
+            result = supabase_client.transfer_item(
+                from_location_id=from_loc["id"],
+                to_location_id=to_loc["id"],
+                item_name=item_name,
+                quantity=quantity,
+                reason=reason
+            )
+
+            if result.get("error"):
+                return {"error": result["error"], "source": "Campaign Database"}
+
+            return {
+                "result": result,
+                "content": format_inventory_transaction(result, "transferred"),
+                "message": f"Transferred {item_name} from {from_location} to {to_location}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error transferring item: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_storage_locations() -> Dict[str, Any]:
+        """Get all storage locations for the party.
+
+        Returns:
+            List of storage locations with types and descriptions.
+        """
+        logger.debug("Getting storage locations")
+
+        try:
+            locations = supabase_client.get_storage_locations()
+
+            return {
+                "locations": locations,
+                "count": len(locations),
+                "content": format_storage_locations(locations),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting storage locations: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    # =========================================================================
+    # CURRENCY TOOLS
+    # =========================================================================
+
+    @app.tool()
+    def get_party_wealth(location_name: str = None) -> Dict[str, Any]:
+        """Get party's currency, either total or by location.
+
+        Args:
+            location_name: Optional specific location to check
+
+        Returns:
+            Currency breakdown by denomination.
+        """
+        logger.debug(f"Getting party wealth: {location_name}")
+
+        try:
+            if location_name:
+                currency = supabase_client.get_currency(location_name=location_name)
+                content = format_currency_by_location(currency)
+            else:
+                # Get total wealth view
+                wealth = supabase_client.get_total_wealth()
+                content = format_wealth_summary(wealth)
+
+            return {
+                "currency": currency if location_name else wealth,
+                "content": content,
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting party wealth: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_currency_by_location() -> Dict[str, Any]:
+        """Get currency breakdown for each storage location.
+
+        Returns:
+            Currency at each location with totals.
+        """
+        logger.debug("Getting currency by location")
+
+        try:
+            currency = supabase_client.get_currency()
+
+            return {
+                "currency": currency,
+                "count": len(currency),
+                "content": format_currency_by_location(currency),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting currency by location: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def add_currency(location_name: str,
+                    copper: int = 0,
+                    silver: int = 0,
+                    electrum: int = 0,
+                    gold: int = 0,
+                    platinum: int = 0,
+                    reason: str = None) -> Dict[str, Any]:
+        """Add currency to a storage location.
+
+        Args:
+            location_name: Storage location name
+            copper: Copper pieces to add
+            silver: Silver pieces to add
+            electrum: Electrum pieces to add
+            gold: Gold pieces to add
+            platinum: Platinum pieces to add
+            reason: Reason for adding (e.g., "Sold gems", "Quest reward")
+
+        Returns:
+            Updated currency balance.
+        """
+        logger.debug(f"Adding currency to {location_name}")
+
+        try:
+            loc = supabase_client.get_storage_location_by_name(location_name)
+            if not loc:
+                return {"error": f"Location '{location_name}' not found",
+                        "source": "Campaign Database"}
+
+            result = supabase_client.add_currency(
+                storage_location_id=loc["id"],
+                copper=copper,
+                silver=silver,
+                electrum=electrum,
+                gold=gold,
+                platinum=platinum,
+                reason=reason
+            )
+
+            return {
+                "currency": result,
+                "content": format_currency_transaction(result, "added"),
+                "message": f"Added currency to {location_name}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error adding currency: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def remove_currency(location_name: str,
+                       copper: int = 0,
+                       silver: int = 0,
+                       electrum: int = 0,
+                       gold: int = 0,
+                       platinum: int = 0,
+                       reason: str = None) -> Dict[str, Any]:
+        """Remove currency from a storage location.
+
+        Args:
+            location_name: Storage location name
+            copper: Copper pieces to remove
+            silver: Silver pieces to remove
+            electrum: Electrum pieces to remove
+            gold: Gold pieces to remove
+            platinum: Platinum pieces to remove
+            reason: Reason for removal (e.g., "Purchased items", "Paid for services")
+
+        Returns:
+            Updated currency balance.
+        """
+        logger.debug(f"Removing currency from {location_name}")
+
+        try:
+            loc = supabase_client.get_storage_location_by_name(location_name)
+            if not loc:
+                return {"error": f"Location '{location_name}' not found",
+                        "source": "Campaign Database"}
+
+            result = supabase_client.remove_currency(
+                storage_location_id=loc["id"],
+                copper=copper,
+                silver=silver,
+                electrum=electrum,
+                gold=gold,
+                platinum=platinum,
+                reason=reason
+            )
+
+            if result.get("error"):
+                return {"error": result["error"], "source": "Campaign Database"}
+
+            return {
+                "currency": result,
+                "content": format_currency_transaction(result, "removed"),
+                "message": f"Removed currency from {location_name}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error removing currency: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def transfer_currency(from_location: str,
+                         to_location: str,
+                         copper: int = 0,
+                         silver: int = 0,
+                         electrum: int = 0,
+                         gold: int = 0,
+                         platinum: int = 0,
+                         reason: str = None) -> Dict[str, Any]:
+        """Transfer currency between storage locations.
+
+        Args:
+            from_location: Source location name
+            to_location: Destination location name
+            copper: Copper pieces to transfer
+            silver: Silver pieces to transfer
+            electrum: Electrum pieces to transfer
+            gold: Gold pieces to transfer
+            platinum: Platinum pieces to transfer
+            reason: Reason for transfer
+
+        Returns:
+            Transfer result.
+        """
+        logger.debug(f"Transferring currency from {from_location} to {to_location}")
+
+        try:
+            from_loc = supabase_client.get_storage_location_by_name(from_location)
+            to_loc = supabase_client.get_storage_location_by_name(to_location)
+
+            if not from_loc:
+                return {"error": f"Location '{from_location}' not found",
+                        "source": "Campaign Database"}
+            if not to_loc:
+                return {"error": f"Location '{to_location}' not found",
+                        "source": "Campaign Database"}
+
+            result = supabase_client.transfer_currency(
+                from_location_id=from_loc["id"],
+                to_location_id=to_loc["id"],
+                copper=copper,
+                silver=silver,
+                electrum=electrum,
+                gold=gold,
+                platinum=platinum,
+                reason=reason
+            )
+
+            return {
+                "result": result,
+                "content": format_currency_transaction(result, "transferred"),
+                "message": f"Transferred currency from {from_location} to {to_location}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error transferring currency: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    # =========================================================================
+    # DIARY TOOLS
+    # =========================================================================
+
+    @app.tool()
+    def get_diary_entries(limit: int = 10, month_year: str = None) -> Dict[str, Any]:
+        """Get campaign diary entries.
+
+        Args:
+            limit: Maximum number of entries to return (default 10)
+            month_year: Optional filter by month (e.g., "March 2025")
+
+        Returns:
+            List of diary entries with summaries.
+        """
+        logger.debug(f"Getting diary entries: limit={limit}, month={month_year}")
+
+        try:
+            entries = supabase_client.get_diary_entries(limit=limit, month_year=month_year)
+
+            return {
+                "entries": entries,
+                "count": len(entries),
+                "content": format_diary_list(entries),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting diary entries: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def get_diary_entry(entry_id: str) -> Dict[str, Any]:
+        """Get a specific diary entry by ID.
+
+        Args:
+            entry_id: UUID of the diary entry
+
+        Returns:
+            Full diary entry content.
+        """
+        logger.debug(f"Getting diary entry: {entry_id}")
+
+        try:
+            entry = supabase_client.get_diary_entry(entry_id)
+            if not entry:
+                return {"error": f"Entry '{entry_id}' not found",
+                        "source": "Campaign Database"}
+
+            return {
+                "entry": entry,
+                "content": format_diary_entry(entry),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error getting diary entry: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def add_diary_entry(content: str,
+                       title: str = None,
+                       session_date: str = None,
+                       in_game_date: str = None,
+                       locations: str = None,
+                       npcs: str = None,
+                       quests: str = None,
+                       loot: str = None) -> Dict[str, Any]:
+        """Add a new diary entry to the campaign log.
+
+        Args:
+            content: Main diary content/summary
+            title: Entry title (e.g., "The Battle at Vraath Keep")
+            session_date: Real-world session date (YYYY-MM-DD)
+            in_game_date: In-game date
+            locations: Comma-separated locations visited
+            npcs: Comma-separated NPCs encountered
+            quests: Comma-separated quest updates
+            loot: Loot summary (JSON string or plain text)
+
+        Returns:
+            Created diary entry.
+        """
+        logger.debug(f"Adding diary entry: {title}")
+
+        try:
+            # Get the first party (assuming single party for now)
+            parties = supabase_client.get("parties", limit=1)
+            if not parties:
+                return {"error": "No party found in database",
+                        "source": "Campaign Database"}
+
+            party_id = parties[0]["id"]
+
+            # Parse month_year from session_date if provided
+            month_year = None
+            if session_date:
+                try:
+                    date_obj = datetime.strptime(session_date, "%Y-%m-%d")
+                    month_year = date_obj.strftime("%B %Y")
+                except ValueError:
+                    pass
+
+            # Parse comma-separated lists
+            locations_list = [l.strip() for l in locations.split(",")] if locations else None
+            npcs_list = [n.strip() for n in npcs.split(",")] if npcs else None
+            quests_list = [q.strip() for q in quests.split(",")] if quests else None
+
+            # Parse loot (could be JSON or plain text)
+            loot_data = None
+            if loot:
+                try:
+                    import json
+                    loot_data = json.loads(loot)
+                except (json.JSONDecodeError, ValueError):
+                    loot_data = {"notes": loot}
+
+            result = supabase_client.add_diary_entry(
+                party_id=party_id,
+                content=content,
+                title=title,
+                session_date=session_date,
+                month_year=month_year,
+                in_game_date=in_game_date,
+                locations_visited=locations_list,
+                npcs_encountered=npcs_list,
+                quests_updated=quests_list,
+                loot_summary=loot_data
+            )
+
+            return {
+                "entry": result,
+                "content": format_diary_entry(result),
+                "message": f"Added diary entry: {title or 'Untitled'}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error adding diary entry: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def update_diary_entry(entry_id: str,
+                          content: str = None,
+                          title: str = None,
+                          locations: str = None,
+                          npcs: str = None,
+                          quests: str = None) -> Dict[str, Any]:
+        """Update an existing diary entry.
+
+        Args:
+            entry_id: UUID of the entry to update
+            content: New content (replaces existing)
+            title: New title
+            locations: Comma-separated locations (replaces existing)
+            npcs: Comma-separated NPCs (replaces existing)
+            quests: Comma-separated quests (replaces existing)
+
+        Returns:
+            Updated diary entry.
+        """
+        logger.debug(f"Updating diary entry: {entry_id}")
+
+        try:
+            updates = {}
+            if content is not None:
+                updates["content"] = content
+            if title is not None:
+                updates["title"] = title
+            if locations is not None:
+                updates["locations_visited"] = [l.strip() for l in locations.split(",")]
+            if npcs is not None:
+                updates["npcs_encountered"] = [n.strip() for n in npcs.split(",")]
+            if quests is not None:
+                updates["quests_updated"] = [q.strip() for q in quests.split(",")]
+
+            result = supabase_client.update_diary_entry(entry_id, updates)
+            if not result:
+                return {"error": f"Entry '{entry_id}' not found",
+                        "source": "Campaign Database"}
+
+            return {
+                "entry": result,
+                "content": format_diary_entry(result),
+                "message": f"Updated diary entry: {result.get('title', entry_id)}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error updating diary entry: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def delete_diary_entry(entry_id: str) -> Dict[str, Any]:
+        """Delete a diary entry.
+
+        Args:
+            entry_id: UUID of the entry to delete
+
+        Returns:
+            Confirmation of deletion.
+        """
+        logger.debug(f"Deleting diary entry: {entry_id}")
+
+        try:
+            success = supabase_client.delete_diary_entry(entry_id)
+
+            if success:
+                return {
+                    "deleted": True,
+                    "entry_id": entry_id,
+                    "message": "Diary entry deleted successfully",
+                    "source": "Campaign Database"
+                }
+            else:
+                return {
+                    "error": f"Entry '{entry_id}' not found or could not be deleted",
+                    "source": "Campaign Database"
+                }
+        except Exception as e:
+            logger.error(f"Error deleting diary entry: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    # =========================================================================
+    # SPELL MANAGEMENT TOOLS
+    # =========================================================================
+
+    @app.tool()
+    def add_character_spell(character_name: str,
+                           spell_name: str,
+                           spell_level: int,
+                           source_type: str,
+                           source_name: str,
+                           charges: int = None,
+                           notes: str = None) -> Dict[str, Any]:
+        """Add a spell to a character's spell list.
+
+        Args:
+            character_name: Name of the character
+            spell_name: Name of the spell
+            spell_level: Spell level (0 for cantrips)
+            source_type: Source type (class, item, feat, racial)
+            source_name: Source name (e.g., "Staff of Power", "Bard")
+            charges: Required charges if from an item
+            notes: Additional notes
+
+        Returns:
+            Added spell details.
+        """
+        logger.debug(f"Adding spell {spell_name} to {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            result = supabase_client.add_character_spell(
+                character_id=char["id"],
+                spell_name=spell_name,
+                spell_level=spell_level,
+                source_type=source_type,
+                source_name=source_name,
+                charges_required=charges,
+                notes=notes
+            )
+
+            return {
+                "spell": result,
+                "message": f"Added {spell_name} to {character_name}'s spell list",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error adding spell: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def remove_character_spell(character_name: str, spell_name: str) -> Dict[str, Any]:
+        """Remove a spell from a character's spell list.
+
+        Args:
+            character_name: Name of the character
+            spell_name: Name of the spell to remove
+
+        Returns:
+            Confirmation of removal.
+        """
+        logger.debug(f"Removing spell {spell_name} from {character_name}")
+
+        try:
+            char = supabase_client.get_character_by_name(character_name)
+            if not char:
+                return {"error": f"Character '{character_name}' not found",
+                        "source": "Campaign Database"}
+
+            success = supabase_client.remove_character_spell(char["id"], spell_name)
+
+            if success:
+                return {
+                    "removed": True,
+                    "spell_name": spell_name,
+                    "message": f"Removed {spell_name} from {character_name}'s spell list",
+                    "source": "Campaign Database"
+                }
+            else:
+                return {"error": f"Spell '{spell_name}' not found on {character_name}",
+                        "source": "Campaign Database"}
+        except Exception as e:
+            logger.error(f"Error removing spell: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    # =========================================================================
+    # COMBINED LOOKUP TOOL (D&D API + Campaign)
+    # =========================================================================
+
+    @app.tool()
+    def lookup_spell(spell_name: str, character_name: str = None) -> Dict[str, Any]:
+        """Look up spell information from D&D 5e API and check if a character knows it.
+
+        This tool combines the D&D 5e API spell data with campaign character spell lists.
+
+        Args:
+            spell_name: Name of the spell to look up
+            character_name: Optional character to check if they know this spell
+
+        Returns:
+            Spell details from D&D API plus campaign character spell access info.
+        """
+        logger.debug(f"Looking up spell: {spell_name}, character: {character_name}")
+
+        try:
+            # Get spell from D&D API (using existing function)
+            from src.core.api_helpers import API_BASE_URL
+            import requests
+
+            spell_index = spell_name.lower().replace(" ", "-").replace("'", "")
+            url = f"{API_BASE_URL}/spells/{spell_index}"
+
+            response = requests.get(url, timeout=REQUEST_TIMEOUT)
+
+            spell_data = None
+            if response.status_code == 200:
+                spell_data = response.json()
+
+            # Check character spell access if character specified
+            character_access = None
+            if character_name:
+                char = supabase_client.get_character_by_name(character_name)
+                if char:
+                    spells = supabase_client.get_character_spells(char["id"])
+                    for spell in spells:
+                        if spell.get("spell_name", "").lower() == spell_name.lower():
+                            character_access = {
+                                "has_spell": True,
+                                "source_type": spell.get("source_type"),
+                                "source_name": spell.get("source_name"),
+                                "charges_required": spell.get("charges_required"),
+                                "notes": spell.get("notes")
+                            }
+                            break
+                    if not character_access:
+                        character_access = {"has_spell": False}
+
+            result = {
+                "spell_name": spell_name,
+                "source": "D&D 5e API + Campaign Database"
+            }
+
+            if spell_data:
+                result["spell_data"] = spell_data
+                result["found_in_api"] = True
+            else:
+                result["found_in_api"] = False
+                result["message"] = f"Spell '{spell_name}' not found in D&D 5e API"
+
+            if character_access:
+                result["character_access"] = character_access
+                result["character_name"] = character_name
+
+            return result
+        except Exception as e:
+            logger.error(f"Error looking up spell: {e}")
+            return {"error": str(e), "source": "D&D 5e API + Campaign Database"}
+
+    # =========================================================================
+    # UTILITY TOOLS
+    # =========================================================================
+
+    @app.tool()
+    def campaign_health_check() -> Dict[str, Any]:
+        """Check the health of the campaign database connection.
+
+        Returns:
+            Connection status and basic stats.
+        """
+        logger.debug("Checking campaign database health")
+
+        try:
+            health = supabase_client.health_check()
+
+            return {
+                "status": health.get("status", "unknown"),
+                "connected": health.get("connected", False),
+                "message": "Campaign database is healthy" if health.get("connected") else "Database connection failed",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error checking campaign health: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def create_inventory_snapshot(note: str = None) -> Dict[str, Any]:
+        """Create a complete snapshot of all inventory, currency, and ledgers.
+
+        Saves a JSON file to the snapshots directory with full inventory state.
+        Use this to create historical records before major changes.
+
+        Args:
+            note: Optional note to include in the snapshot (e.g., "Before dragon fight")
+
+        Returns:
+            Snapshot summary and file path.
+        """
+        import json
+        import os
+
+        logger.debug("Creating inventory snapshot")
+
+        try:
+            # Get the snapshot data
+            snapshot = supabase_client.create_inventory_snapshot()
+
+            # Add the note if provided
+            if note:
+                snapshot["note"] = note
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"inventory_snapshot_{timestamp}.json"
+
+            # Get the snapshots directory (relative to the server file)
+            snapshots_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "snapshots")
+            os.makedirs(snapshots_dir, exist_ok=True)
+
+            filepath = os.path.join(snapshots_dir, filename)
+
+            # Write the snapshot
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(snapshot, f, indent=2, default=str)
+
+            # Build summary
+            totals = snapshot.get("totals", {})
+            summary_lines = [
+                "# Inventory Snapshot Created",
+                "",
+                f"**File:** `{filename}`",
+                f"**Timestamp:** {snapshot.get('snapshot_timestamp', 'Unknown')}",
+            ]
+
+            if note:
+                summary_lines.append(f"**Note:** {note}")
+
+            summary_lines.extend([
+                "",
+                "## Summary",
+                f"- **Total Items:** {totals.get('total_items', 0)}",
+                f"- **Magic Items:** {totals.get('magic_items', 0)}",
+                f"- **Storage Locations:** {totals.get('total_locations', 0)}",
+                f"- **Inventory Transactions:** {totals.get('inventory_transactions', 0)}",
+                f"- **Currency Transactions:** {totals.get('currency_transactions', 0)}",
+            ])
+
+            wealth = totals.get("wealth", {})
+            if wealth:
+                summary_lines.extend([
+                    "",
+                    "## Total Wealth",
+                    f"- **Gold Value:** {wealth.get('total_gp_value', 0):,.2f} gp",
+                ])
+
+            return {
+                "filename": filename,
+                "filepath": filepath,
+                "timestamp": snapshot.get("snapshot_timestamp"),
+                "totals": totals,
+                "content": "\n".join(summary_lines),
+                "message": f"Snapshot saved to {filename}",
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error creating snapshot: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    @app.tool()
+    def list_inventory_snapshots() -> Dict[str, Any]:
+        """List all available inventory snapshots.
+
+        Returns:
+            List of snapshot files with timestamps.
+        """
+        import os
+
+        logger.debug("Listing inventory snapshots")
+
+        try:
+            snapshots_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "snapshots")
+
+            if not os.path.exists(snapshots_dir):
+                return {
+                    "snapshots": [],
+                    "count": 0,
+                    "content": "No snapshots directory found.",
+                    "source": "Campaign Database"
+                }
+
+            files = []
+            for f in os.listdir(snapshots_dir):
+                if f.endswith('.json') and f.startswith('inventory_snapshot_'):
+                    filepath = os.path.join(snapshots_dir, f)
+                    stat = os.stat(filepath)
+                    files.append({
+                        "filename": f,
+                        "size_kb": round(stat.st_size / 1024, 2),
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    })
+
+            # Sort by modified date descending
+            files.sort(key=lambda x: x["modified"], reverse=True)
+
+            # Format output
+            lines = ["# Inventory Snapshots", ""]
+            if files:
+                lines.append("| Filename | Size | Created |")
+                lines.append("|----------|------|---------|")
+                for f in files:
+                    lines.append(f"| {f['filename']} | {f['size_kb']} KB | {f['modified']} |")
+            else:
+                lines.append("*No snapshots found.*")
+
+            return {
+                "snapshots": files,
+                "count": len(files),
+                "content": "\n".join(lines),
+                "source": "Campaign Database"
+            }
+        except Exception as e:
+            logger.error(f"Error listing snapshots: {e}")
+            return {"error": str(e), "source": "Campaign Database"}
+
+    print("Campaign tools registered successfully", file=sys.stderr)

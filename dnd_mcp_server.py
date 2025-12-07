@@ -19,6 +19,7 @@ from src.core import prompts
 from src.core import tools
 from src.core import resources
 from src.core.cache import APICache
+from src.core.supabase_client import SupabaseClient
 
 # Configure more detailed logging
 log_dir = "logs"
@@ -58,10 +59,36 @@ def main():
         print(
             f"API cache initialized (24-hour TTL, persistent cache in {cache_dir})", file=sys.stderr)
 
-        # Register components
+        # Register D&D 5e API components
         resources.register_resources(app, cache)
         tools.register_tools(app, cache)
         prompts.register_prompts(app)
+
+        # Initialize Supabase client for campaign database (optional)
+        supabase_url = os.environ.get("SUPABASE_URL")
+        supabase_key = os.environ.get("SUPABASE_KEY")
+
+        if supabase_url and supabase_key:
+            print("Initializing Supabase client for campaign database...", file=sys.stderr)
+            supabase_client = SupabaseClient(
+                api_url=supabase_url,
+                api_key=supabase_key,
+                cache=cache,
+                cache_prefix="campaign"
+            )
+
+            # Verify connection
+            health = supabase_client.health_check()
+            if health.get("connected"):
+                print("Supabase connected successfully", file=sys.stderr)
+                # Register campaign tools
+                tools.register_campaign_tools(app, supabase_client)
+            else:
+                print(f"Warning: Supabase connection failed: {health.get('error')}", file=sys.stderr)
+                print("Campaign tools will not be available", file=sys.stderr)
+        else:
+            print("Supabase credentials not found in environment", file=sys.stderr)
+            print("Set SUPABASE_URL and SUPABASE_KEY to enable campaign tools", file=sys.stderr)
 
         # Run the app
         print("Running FastMCP app...", file=sys.stderr)

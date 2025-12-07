@@ -75,6 +75,32 @@ DND_SYNONYMS = {
     "prone": ["knocked down", "lying down", "flat"],
     "stunned": ["dazed", "incapacitated", "unable to act"],
     "unconscious": ["knocked out", "ko", "passed out"],
+
+    # =========================================================================
+    # CAMPAIGN-SPECIFIC SYNONYMS (Brutte Squadde)
+    # =========================================================================
+
+    # Character names
+    "nico olaf": ["nico", "olaf"],
+
+    # Magic items - weapons and staves
+    "staff of power": ["staff", "the staff", "power staff"],
+    "pipes of haunting": ["pipes", "haunting pipes", "the pipes"],
+    "cli lyre": ["lyre", "cli", "the lyre", "instrument of the bards"],
+
+    # Storage locations
+    "bag of holding": ["bag", "boh", "the bag"],
+    "vraath keep": ["vraath", "the keep", "our keep"],
+    "drellens ferry": ["drellens", "drellin's ferry", "the ferry", "town"],
+
+    # Common campaign items
+    "potion of healing": ["healing potion", "health potion", "red potion"],
+    "potion of greater healing": ["greater healing", "big healing potion"],
+    "potion of superior healing": ["superior healing"],
+    "potion of supreme healing": ["supreme healing"],
+
+    # Quest items
+    "quest gem": ["quest gems", "gems", "the gems"],
 }
 
 # Create a reverse mapping for lookup

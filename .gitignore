@@ -34,6 +34,9 @@ cache/
 *.pickle
 index.json
 
+# Snapshots (contain campaign-specific data)
+snapshots/
+
 # Logs
 logs/
 *.log
@@ -51,6 +54,8 @@ logs/
 .env.test.local
 .env.production.local
 claude_desktop_config.json
+.mcp.json
+.claude/
 
 # Jupyter Notebook
 .ipynb_checkpoints
