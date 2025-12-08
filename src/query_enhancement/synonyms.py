@@ -82,16 +82,18 @@ DND_SYNONYMS = {
 
     # Character names
     "nico olaf": ["nico", "olaf"],
+    "Electropop Sickknuckles": ["sicknuckle", "sicknuckel", "sicknuckel's", "sicknuckle's", "electropop", "electro", "elektro", "elecktropop"],
 
     # Magic items - weapons and staves
     "staff of power": ["staff", "the staff", "power staff"],
     "pipes of haunting": ["pipes", "haunting pipes", "the pipes"],
     "cli lyre": ["lyre", "cli", "the lyre", "instrument of the bards"],
+    "Vorpal Longsword": ["vorpal sword", "vorpal", "the vorpal", "the longsword"],
 
     # Storage locations
     "bag of holding": ["bag", "boh", "the bag"],
     "vraath keep": ["vraath", "the keep", "our keep"],
-    "drellens ferry": ["drellens", "drellin's ferry", "the ferry", "town"],
+    "drellens ferry": ["drellens", "drellin's ferry", "the ferry", "town", "Drellin's Ferry", "drellins", "drellins ferry"],
 
     # Common campaign items
     "potion of healing": ["healing potion", "health potion", "red potion"],

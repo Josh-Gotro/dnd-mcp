@@ -14,8 +14,10 @@ from typing import Dict, Any, List, Optional
 
 def format_character_card(data: Dict[str, Any]) -> str:
     """Format a character as a detailed card."""
+    char_name = data.get('name', 'Unknown')
     lines = [
-        f"# {data.get('name', 'Unknown')}",
+        f"# {char_name}",
+        f"*Source: Character Sheet — {char_name}*",
         "",
         f"**Class:** {data.get('class_summary', 'Unknown')}",
         f"**Race:** {data.get('race', 'Unknown')}" +
@@ -108,6 +110,7 @@ def format_character_list(characters: List[Dict]) -> str:
 
     lines = [
         "# Party Characters",
+        "*Source: Character Database*",
         "",
         "| Name | Class | Race | Level |",
         "|------|-------|------|-------|"
@@ -132,7 +135,8 @@ def format_character_spells(character_name: str, spells: List[Dict]) -> str:
     if not spells:
         return f"# {character_name}'s Spells\n\n*No spells found.*"
 
-    lines = [f"# {character_name}'s Spells", ""]
+    lines = [f"# {character_name}'s Spells",
+             f"*Source: Character Sheet — {character_name}*", ""]
 
     # Group by source
     by_source = {}
@@ -184,7 +188,8 @@ def format_character_feats(character_name: str, feats: List[Dict]) -> str:
     if not feats:
         return f"# {character_name}'s Feats\n\n*No feats found.*"
 
-    lines = [f"# {character_name}'s Feats", ""]
+    lines = [f"# {character_name}'s Feats",
+             f"*Source: Character Sheet — {character_name}*", ""]
 
     for feat in feats:
         lines.append(f"## {feat.get('feat_name', 'Unknown')}")
@@ -219,7 +224,8 @@ def format_character_forms(character_name: str, forms: List[Dict]) -> str:
     if not forms:
         return f"# {character_name}'s Forms\n\n*No forms found.*"
 
-    lines = [f"# {character_name}'s Forms", ""]
+    lines = [f"# {character_name}'s Forms",
+             f"*Source: Character Sheet — {character_name}*", ""]
 
     for form in forms:
         lines.append(f"## {form.get('form_name', 'Unknown')}")
@@ -268,7 +274,8 @@ def format_character_companions(character_name: str, companions: List[Dict]) -> 
     if not companions:
         return f"# {character_name}'s Companions\n\n*No companions found.*"
 
-    lines = [f"# {character_name}'s Companions", ""]
+    lines = [f"# {character_name}'s Companions",
+             f"*Source: Character Sheet — {character_name}*", ""]
 
     for comp in companions:
         lines.append(f"## {comp.get('companion_name', 'Unknown')}")
@@ -310,12 +317,20 @@ def format_character_companions(character_name: str, companions: List[Dict]) -> 
 
 def format_inventory_list(items: List[Dict], location_name: str = None) -> str:
     """Format an inventory list grouped by item type."""
-    title = f"# Inventory: {location_name}" if location_name else "# Inventory"
+    if location_name:
+        title = f"# Inventory: {location_name}"
+        source_line = f"*Source: Inventory — {location_name}*"
+    else:
+        title = "# Inventory (All Locations)"
+        source_line = "*Source: Inventory — All Locations*"
 
     if not items:
         return f"{title}\n\n*No items found.*"
 
-    lines = [title, ""]
+    lines = [title, source_line, ""]
+
+    # Check if we need to show location column (when showing all locations)
+    show_location = location_name is None
 
     # Group by item type
     by_type = {}
@@ -328,19 +343,28 @@ def format_inventory_list(items: List[Dict], location_name: str = None) -> str:
     for item_type in sorted(by_type.keys()):
         lines.append(f"## {item_type}")
         lines.append("")
-        lines.append("| Item | Qty | Rarity | Magic | Notes |")
-        lines.append("|------|:---:|--------|:-----:|-------|")
+        if show_location:
+            lines.append("| Item | Qty | Location | Rarity | Magic |")
+            lines.append("|------|:---:|----------|--------|:-----:|")
+        else:
+            lines.append("| Item | Qty | Rarity | Magic | Notes |")
+            lines.append("|------|:---:|--------|:-----:|-------|")
 
         for item in sorted(by_type[item_type], key=lambda x: x.get('item_name', '')):
             name = item.get('item_name', 'Unknown')
             qty = item.get('quantity', 1)
             rarity = (item.get('rarity') or '-').replace('_', ' ').title()
             magic = "Yes" if item.get('is_magic') else "-"
-            notes = item.get('notes', '-') or '-'
-            # Truncate long notes
-            if len(notes) > 40:
-                notes = notes[:37] + "..."
-            lines.append(f"| {name} | {qty} | {rarity} | {magic} | {notes} |")
+
+            if show_location:
+                loc = item.get('location_name', 'Unknown')
+                lines.append(f"| {name} | {qty} | {loc} | {rarity} | {magic} |")
+            else:
+                notes = item.get('notes', '-') or '-'
+                # Truncate long notes
+                if len(notes) > 40:
+                    notes = notes[:37] + "..."
+                lines.append(f"| {name} | {qty} | {rarity} | {magic} | {notes} |")
 
         lines.append("")
 
@@ -371,7 +395,7 @@ def format_inventory_search_results(items: List[Dict], query: str) -> str:
         rarity_indicator = f" ({rarity.replace('_', ' ').title()})" if rarity else ""
 
         lines.append(f"- **{name}**{magic_indicator}{rarity_indicator}")
-        lines.append(f"  - Location: {location}")
+        lines.append(f"  - *Source: Inventory — {location}*")
         lines.append(f"  - Quantity: {qty}")
         if item.get('item_description'):
             desc = item['item_description']
@@ -392,7 +416,7 @@ def format_currency_by_location(currency_data: List[Dict]) -> str:
     if not currency_data:
         return "# Party Currency\n\n*No currency records found.*"
 
-    lines = ["# Party Currency", ""]
+    lines = ["# Party Currency", "*Source: Currency Ledger — By Location*", ""]
     lines.append("| Location | CP | SP | EP | GP | PP | Total (GP) |")
     lines.append("|----------|---:|---:|---:|---:|---:|----------:|")
 
@@ -420,6 +444,7 @@ def format_wealth_summary(wealth: Dict) -> str:
         return "# Party Wealth\n\n*No wealth data found.*"
 
     return f"""# Party Wealth: {wealth.get('party_name', 'Unknown')}
+*Source: Currency Ledger — Total*
 
 | Denomination | Amount |
 |--------------|-------:|
@@ -441,7 +466,7 @@ def format_storage_locations(locations: List[Dict]) -> str:
     if not locations:
         return "# Storage Locations\n\n*No locations found.*"
 
-    lines = ["# Storage Locations", ""]
+    lines = ["# Storage Locations", "*Source: Storage Locations Database*", ""]
     lines.append("| Name | Type | Description |")
     lines.append("|------|------|-------------|")
 
@@ -468,14 +493,14 @@ def format_diary_entry(entry: Dict) -> str:
     lines.append(f"# {title}")
     lines.append("")
 
-    # Metadata
-    meta = []
+    # Source attribution
+    source_parts = []
     if entry.get('session_date'):
-        meta.append(f"**Session Date:** {entry['session_date']}")
+        source_parts.append(f"Session: {entry['session_date']}")
     if entry.get('in_game_date'):
-        meta.append(f"**In-Game Date:** {entry['in_game_date']}")
-    if meta:
-        lines.append(" | ".join(meta))
+        source_parts.append(f"In-Game: {entry['in_game_date']}")
+    if source_parts:
+        lines.append(f"*Source: Campaign Diary — {', '.join(source_parts)}*")
         lines.append("")
 
     # Content
@@ -545,7 +570,15 @@ def format_diary_list(entries: List[Dict]) -> str:
                            reverse=True):
             title = entry.get('title', 'Untitled')
             date = entry.get('session_date', '')
-            in_game = f" (In-game: {entry['in_game_date']})" if entry.get('in_game_date') else ""
+            in_game = entry.get('in_game_date', '')
+
+            # Build source line
+            source_parts = []
+            if date:
+                source_parts.append(f"Session: {date}")
+            if in_game:
+                source_parts.append(f"In-Game: {in_game}")
+            source_line = f"*Source: Diary — {', '.join(source_parts)}*" if source_parts else ""
 
             # Preview of content
             content = entry.get('content', '')
@@ -553,7 +586,8 @@ def format_diary_list(entries: List[Dict]) -> str:
             preview = preview.replace('\n', ' ')
 
             lines.append(f"### {title}")
-            lines.append(f"*{date}{in_game}*")
+            if source_line:
+                lines.append(source_line)
             lines.append("")
             lines.append(preview)
             lines.append("")
